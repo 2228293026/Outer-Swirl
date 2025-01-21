@@ -1,0 +1,10 @@
+{
+    "Id": "OuterSwirl",
+    "DisplayName": "Outer Swirl",
+    "Author": "HitMargin",
+    "Version": "1.0.0",
+    "ManagerVersion": "0.22.14.0",
+    "HomePage": "https://space.bilibili.com/1757946676?spm_id_from=333.337.0.0",
+    "AssemblyName": "Outer Swirl.dll",
+    "EntryMethod": "Outer_Swirl.Main.Load"
+}
