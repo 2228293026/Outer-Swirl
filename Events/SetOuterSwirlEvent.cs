@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Outer_Swirl.Events
 {
-    [EventName("OuterSwirlEvent.displayName")]
+    [EventName("OuterSwirlEvent")]
     [EventCategory("Gameplay")]
     public class SetOuterSwirlEvent : CustomEventBase
     {

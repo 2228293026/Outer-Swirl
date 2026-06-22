@@ -34,10 +34,6 @@ namespace Outer_Swirl
                     // 如果连英文都没有，跳过
                 }
 
-                // 自动注入 editor.{EventType} 别名（例如 editor.100000）
-                if (_localizationDict.TryGetValue(OuterSwirlEventSystem._eventFullName, out string nameVal))
-                    _localizationDict[$"editor.{OuterSwirlEventSystem.EventType}"] = nameVal;
-
                 Debug.Log($"[OuterSwirl] Localization loaded: {_localizationDict.Count} entries");
             }
             catch (Exception ex)

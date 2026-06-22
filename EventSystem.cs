@@ -442,9 +442,43 @@ namespace Outer_Swirl
                 return true; // 继续原方法
             }
         }
-    
 
-    // ===== Helper =====
+        [HarmonyPatch(typeof(LevelData), "Encode")]
+        internal static class LevelDataEncode
+        {
+            [HarmonyPrefix]
+            static void Prefix(LevelData __instance)
+            {
+                UpdateRequiredMods(__instance.levelEvents);
+            }
+        }
+
+        [HarmonyPatch(typeof(RDEditorUtils), "CheckModsDependency")]
+        internal static class RdEditorUtilsCheckModsDependency
+        {
+            [HarmonyPrefix]
+            static bool Prefix(object[] mods, ref bool __result)
+            {
+                return FindRequiredModsAndRemove(mods, ref __result);
+            }
+        }
+
+        [HarmonyPatch(typeof(Enum), "ToString", new Type[] { })]
+        internal static class LevelEventTypeToString
+        {
+            [HarmonyPrefix]
+            static bool Prefix(Enum __instance, ref string __result)
+            {
+                if (__instance is LevelEventType && (LevelEventType)__instance == (LevelEventType)CustomEventTypeBase)
+                {
+                    __result = _eventFullName;
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        // ===== Helper =====
 
         static void ApplyProperties(Dictionary<string, object> data)
         {
@@ -462,6 +496,42 @@ namespace Outer_Swirl
                     Debug.LogError($"[OuterSwirl] Setter for '{name}' failed: {ex}");
                 }
             }
+        }
+
+        internal static void UpdateRequiredMods(EventsArray<LevelEvent> events)
+        {
+            object[] array = (object[])scnGame.instance.levelData.levelSettings["requiredMods"];
+            HashSet<object> set = new HashSet<object>(array);
+            if (events.Any<LevelEvent>((LevelEvent e) => e.eventType == (LevelEventType)CustomEventTypeBase))
+            {
+                if (!array.Contains(_eventFullName))
+                {
+                    set.Add(_eventFullName);
+                }
+            }
+            else
+            {
+                set.Remove(_eventFullName);
+            }
+            scnGame.instance.levelData.levelSettings["requiredMods"] = set.ToArray<object>();
+        }
+
+        internal static bool FindRequiredModsAndRemove(object[] mods, ref bool __result)
+        {
+            bool runBaseMethod;
+            if (mods != null && mods.Contains(_eventFullName))
+            {
+                HashSet<object> hashSet = new HashSet<object>(mods);
+                hashSet.Remove(_eventFullName);
+                mods = hashSet.ToArray<object>();
+                __result = RDEditorUtils.CheckModsDependency(mods);
+                runBaseMethod = false;
+            }
+            else
+            {
+                runBaseMethod = true;
+            }
+            return runBaseMethod;
         }
     }
 }

@@ -401,7 +401,10 @@ namespace Outer_Swirl
                 typeof(OuterSwirlEventSystem.RDStringGetWithCheckPatch),
                 typeof(FoolSwirlPatch.PatchStart),
                 typeof(FoolSwirlPatch.PatchUpdateRefreshAngles),
-                typeof(FoolSwirlPatch.PatchMoveToNextFloor)
+                typeof(FoolSwirlPatch.PatchMoveToNextFloor),
+                typeof(OuterSwirlEventSystem.LevelDataEncode),
+                typeof(OuterSwirlEventSystem.RdEditorUtilsCheckModsDependency),
+                typeof(OuterSwirlEventSystem.LevelEventTypeToString)
             );
         }
     }
