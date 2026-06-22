@@ -45,7 +45,7 @@ namespace Outer_Swirl
         private static string GetCurrentLanguageCode()
         {
             // 根据游戏当前语言映射到 ISO 代码
-            switch (Persistence.language)
+            switch (RDString.language)
             {
                 case SystemLanguage.ChineseSimplified:
                 case SystemLanguage.Chinese:

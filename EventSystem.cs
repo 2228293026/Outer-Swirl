@@ -3,10 +3,12 @@ using HarmonyLib;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using UnityEngine;
+using static UnityModManagerNet.UnityModManager.Param;
 using ADOFAIPropInfo = ADOFAI.PropertyInfo;
 
 namespace Outer_Swirl
@@ -76,7 +78,6 @@ namespace Outer_Swirl
         private static readonly List<PropAccessor> _propAccessors = new();
         internal static string _eventFullName;
         private static List<LevelEventCategory> _eventCategories;
-        private static string _pendingLocJson;
 
         public static void Initialize(CustomEventBase ev)
         {
@@ -140,14 +141,6 @@ namespace Outer_Swirl
             {
                 Debug.LogError($"[OuterSwirl] Initialize failed: {ex}");
             }
-        }
-
-        static void TryRegisterLocalization()
-        {
-            if (_pendingLocJson == null) return;
-            var json = _pendingLocJson;
-            _pendingLocJson = null;
-            OuterSwirlLocalization.RegisterLocalization(json);
         }
 
         static void TryRegister()
@@ -340,7 +333,9 @@ namespace Outer_Swirl
             static void AfterAwake()
             {
                 TryRegister();
-                TryRegisterLocalization();
+                var locPath = Path.Combine(Main.Mod.Path, "Localization.json");
+                if (File.Exists(locPath))
+                    OuterSwirlLocalization.RegisterLocalization(File.ReadAllText(locPath));
             }
         }
 
