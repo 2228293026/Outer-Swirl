@@ -320,39 +320,6 @@ namespace Outer_Swirl
             return "String";
         }
 
-        static readonly Dictionary<string, SystemLanguage> LangCodeMap = new()
-        {
-            ["en"] = SystemLanguage.English,
-            ["zh"] = SystemLanguage.ChineseSimplified,
-            ["zh-CN"] = SystemLanguage.ChineseSimplified,
-            ["zh-TW"] = SystemLanguage.ChineseTraditional,
-            ["ja"] = SystemLanguage.Japanese,
-            ["ko"] = SystemLanguage.Korean,
-            ["fr"] = SystemLanguage.French,
-            ["de"] = SystemLanguage.German,
-            ["es"] = SystemLanguage.Spanish,
-            ["pt"] = SystemLanguage.Portuguese,
-            ["ru"] = SystemLanguage.Russian,
-            ["it"] = SystemLanguage.Italian,
-            ["nl"] = SystemLanguage.Dutch,
-            ["pl"] = SystemLanguage.Polish,
-            ["tr"] = SystemLanguage.Turkish,
-            ["th"] = SystemLanguage.Thai,
-        };
-
-        static void TryInjectEditorAlias(Dictionary<SystemLanguage, Dictionary<string, string>> sheet)
-        {
-            if (!sheet.Any()) return;
-            // 编辑器用 RDString.Get($"editor.{LevelEventType}")，所以翻译 key 必须是 "editor.100000"
-            // 自动从 _eventFullName 复制翻译到 editor.100000，不需要用户手动配
-            string editorKey = $"editor.{EventType}";  // → "editor.100000"
-            foreach (var langDict in sheet.Values)
-            {
-                if (!langDict.ContainsKey(editorKey) && langDict.TryGetValue(_eventFullName, out var val))
-                    langDict[editorKey] = val;
-            }
-        }
-
         // ===== Harmony Patch Classes =====
 
         [HarmonyPatch(typeof(scnGame), nameof(scnGame.ApplyEventsToFloors), typeof(List<scrFloor>))]
@@ -411,72 +378,6 @@ namespace Outer_Swirl
             }
         }
 
-        [HarmonyPatch(typeof(LevelData), nameof(LevelData.EncodeToDictionary))]
-        internal static class EncodeToDictionaryPatch
-        {
-            [HarmonyPrefix]
-            static void Prefix(LevelData __instance)
-            {
-                var list = __instance.levelEvents;
-                _backup.Clear();
-                _backup.AddRange(list);
-
-                for (int i = 0; i < list.Count; i++)
-                {
-                    var ev = list[i];
-                    if ((int)ev.eventType != CustomEventTypeBase) continue;
-
-                    var encoded = ev.Encode(false);
-                    var json = JsonConvert.SerializeObject(encoded, Formatting.Indented);
-
-                    var commentEvent = new LevelEvent(ev.floor, LevelEventType.EditorComment);
-                    commentEvent["comment"] = "!EVENT\n" + json;
-                    list[i] = commentEvent;
-                }
-            }
-
-            [HarmonyPostfix]
-            static void Postfix(LevelData __instance)
-            {
-                __instance.levelEvents.Clear();
-                __instance.levelEvents.AddRange(_backup);
-            }
-        }
-
-        [HarmonyPatch(typeof(LevelData), nameof(LevelData.Decode))]
-        internal static class DecodePatch
-        {
-            [HarmonyPostfix]
-            static void Postfix(LevelData __instance, Dictionary<string, object> dict, out LoadResult status)
-            {
-                status = default;
-                var list = __instance.levelEvents;
-                for (int i = 0; i < list.Count; i++)
-                {
-                    var ev = list[i];
-                    if (ev.eventType != LevelEventType.EditorComment) continue;
-                    if (!ev.ContainsKey("comment")) continue;
-
-                    var comment = ev.GetString("comment");
-                    if (string.IsNullOrEmpty(comment)) continue;
-
-                    const string prefix = "!EVENT\n";
-                    if (!comment.StartsWith(prefix)) continue;
-
-                    try
-                    {
-                        var json = comment.Substring(prefix.Length);
-                        var evDict = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
-                        list[i] = new LevelEvent(evDict);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError($"[OuterSwirl] Decode error: {ex.Message}");
-                    }
-                }
-            }
-        }
-
         [HarmonyPatch(typeof(Enum), nameof(Enum.GetValues))]
         internal static class EnumGetValuesPatch
         {
@@ -497,6 +398,31 @@ namespace Outer_Swirl
                     return false; // 跳过原方法
                 }
                 return true; // 其他类型正常处理
+            }
+        }
+
+        [HarmonyPatch]
+        internal static class ParseEnum
+        {
+            private static MethodBase TargetMethod()
+            {
+                MethodInfo methodDef = typeof(RDUtils).GetMethods(BindingFlags.Static | BindingFlags.Public).FirstOrDefault<MethodInfo>((MethodInfo m) => m.Name == "ParseEnum" && m.IsGenericMethodDefinition);
+                if (methodDef == null)
+                {
+                    return null;
+                }
+                return methodDef.MakeGenericMethod(new Type[] { typeof(LevelEventType) });
+            }
+
+            [HarmonyPrefix]
+            private static bool Prefix(string str, ref LevelEventType __result)
+            {
+                if (str == _eventFullName)
+                {
+                    __result = (LevelEventType)CustomEventTypeBase;
+                    return false;
+                }
+                return true;
             }
         }
 
