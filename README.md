@@ -89,4 +89,4 @@ bin\Release\Outer Swirl.dll
 
 ## 许可证
 
-本仓库当前未声明许可证。使用、分发或修改前请先与作者确认。
+本项目采用 MIT 协议开源，详情请参见 [LICENSE](LICENSE)。
