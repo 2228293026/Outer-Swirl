@@ -321,16 +321,17 @@ namespace Outer_Swirl
             [HarmonyPrefix]
             static void ClearCache()
             {
+                TryRegister();
                 _floorCache.Clear();
                 Patch.FoolSwirlPatch.Active = false;
             }
         }
 
-        [HarmonyPatch(typeof(scnEditor), "Awake")]
+        [HarmonyPatch(typeof(scnGame), "Awake")]
         internal static class EditorAwakePatch
         {
-            [HarmonyPostfix]
-            static void AfterAwake()
+            [HarmonyPrefix]
+            static void BeforeAwake()
             {
                 TryRegister();
                 var locPath = Path.Combine(Main.Mod.Path, "Localization.json");
