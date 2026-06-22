@@ -77,9 +77,6 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Memory" />
-    <Reference Include="System.Runtime.CompilerServices.Unsafe">
-      <HintPath>D:\Program Files\Steam\steamapps\common\A Dance of Fire and Ice\A Dance of Fire and Ice_Data\Managed\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
-    </Reference>
     <Reference Include="System.Text.Encodings.Web">
       <HintPath>D:\Program Files\Steam\steamapps\common\A Dance of Fire and Ice\A Dance of Fire and Ice_Data\Managed\System.Text.Encodings.Web.dll</HintPath>
     </Reference>
@@ -99,6 +96,7 @@
     <Compile Include="Events\SetOuterSwirlEvent.cs" />
     <Compile Include="Patch\FoolSwirlPatch.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="PatchManager.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Info.json" />

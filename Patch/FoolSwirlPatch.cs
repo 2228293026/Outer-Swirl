@@ -28,7 +28,7 @@ namespace Outer_Swirl.Patch
         }
 
         [HarmonyPatch(typeof(scrPlanet), "Start")]
-        static class PatchStart
+        internal static class PatchStart
         {
             [HarmonyTranspiler]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> ins)
@@ -36,7 +36,7 @@ namespace Outer_Swirl.Patch
         }
 
         [HarmonyPatch(typeof(scrPlanet), "Update_RefreshAngles")]
-        static class PatchUpdateRefreshAngles
+        internal static class PatchUpdateRefreshAngles
         {
             [HarmonyTranspiler]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> ins)
@@ -44,7 +44,7 @@ namespace Outer_Swirl.Patch
         }
 
         [HarmonyPatch(typeof(scrPlanet), "MoveToNextFloor")]
-        static class PatchMoveToNextFloor
+        internal static class PatchMoveToNextFloor
         {
             [HarmonyTranspiler]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> ins)

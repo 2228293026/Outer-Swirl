@@ -344,7 +344,7 @@ namespace Outer_Swirl
         // ===== Harmony Patch Classes =====
 
         [HarmonyPatch(typeof(scnGame), "ApplyEventsToFloors", typeof(List<scrFloor>))]
-        static class ClearCachePatch
+        internal static class ClearCachePatch
         {
             [HarmonyPrefix]
             static void ClearCache()
@@ -357,7 +357,7 @@ namespace Outer_Swirl
         }
 
         [HarmonyPatch(typeof(scnEditor), "Awake")]
-        static class EditorAwakePatch
+        internal static class EditorAwakePatch
         {
             [HarmonyPostfix]
             static void AfterAwake()
@@ -368,7 +368,7 @@ namespace Outer_Swirl
         }
 
         [HarmonyPatch(typeof(scnGame), "ApplyEvent")]
-        static class ApplyEventPatch
+        internal static class ApplyEventPatch
         {
             [HarmonyPrefix]
             static bool Prefix(LevelEvent evnt)
@@ -387,7 +387,7 @@ namespace Outer_Swirl
         }
 
         [HarmonyPatch(typeof(scrPlanet), "MoveToNextFloor")]
-        static class MoveToNextFloorPatch
+        internal static class MoveToNextFloorPatch
         {
             [HarmonyPostfix]
             static void Postfix(scrFloor floor)
@@ -401,7 +401,7 @@ namespace Outer_Swirl
         }
 
         [HarmonyPatch(typeof(LevelData), "EncodeToDictionary")]
-        static class EncodeToDictionaryPatch
+        internal static class EncodeToDictionaryPatch
         {
             [HarmonyPrefix]
             static void Prefix(LevelData __instance)
@@ -433,7 +433,7 @@ namespace Outer_Swirl
         }
 
         [HarmonyPatch(typeof(LevelData), "Decode")]
-        static class DecodePatch
+        internal static class DecodePatch
         {
             [HarmonyPostfix]
             static void Postfix(LevelData __instance, Dictionary<string, object> dict, out LoadResult status)
