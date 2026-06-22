@@ -321,7 +321,6 @@ namespace Outer_Swirl
             [HarmonyPrefix]
             static void ClearCache()
             {
-                TryRegister();
                 _floorCache.Clear();
                 Patch.FoolSwirlPatch.Active = false;
             }
