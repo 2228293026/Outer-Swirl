@@ -215,10 +215,45 @@ namespace Outer_Swirl
                 }
 
                 Debug.Log($"[OuterSwirl] Registered event '{_eventFullName}' (ID={CustomEventTypeBase})");
+
+                if (GCS.levelEventsInfo.ContainsKey(eventKey))
+                    RegisterSoloType();
+
             }
             catch (Exception ex)
             {
                 Debug.LogError($"[OuterSwirl] Register event failed: {ex}");
+            }
+        }
+
+        private static void RegisterSoloType()
+        {
+            try
+            {
+                var field = typeof(EditorConstants).GetField("soloTypes", BindingFlags.Static | BindingFlags.Public);
+                if (field == null)
+                {
+                    Debug.Log("[OuterSwirl] soloTypes field not found");
+                    return;
+                }
+
+                var current = (LevelEventType[])field.GetValue(null);
+                var customType = (LevelEventType)CustomEventTypeBase;
+
+                // 如果已经包含则跳过
+                if (Array.IndexOf(current, customType) >= 0) return;
+
+                // 添加新元素
+                var newArray = new LevelEventType[current.Length + 1];
+                Array.Copy(current, newArray, current.Length);
+                newArray[current.Length] = customType;
+                field.SetValue(null, newArray);
+
+                Debug.Log($"[OuterSwirl] Added event type {customType} to soloTypes");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[OuterSwirl] Failed to register solo type: {ex}");
             }
         }
 
@@ -463,6 +498,29 @@ namespace Outer_Swirl
                         Debug.LogError($"[OuterSwirl] Decode error: {ex.Message}");
                     }
                 }
+            }
+        }
+
+        [HarmonyPatch(typeof(Enum), "GetValues")]
+        internal static class EnumGetValuesPatch
+        {
+            private static bool _executeOriginal = false;
+
+            [HarmonyPrefix]
+            private static bool Prefix(Type enumType, ref Array __result)
+            {
+                if (enumType == typeof(LevelEventType) && !_executeOriginal)
+                {
+                    _executeOriginal = true;
+                    // 获取原版枚举值列表
+                    var original = Enum.GetValues(typeof(LevelEventType)) as LevelEventType[];
+
+                    var merged = original.Concat(new[] { (LevelEventType)OuterSwirlEventSystem.CustomEventTypeBase }).ToArray();
+                    __result = merged;
+                    _executeOriginal = false;
+                    return false; // 跳过原方法
+                }
+                return true; // 其他类型正常处理
             }
         }
 

@@ -270,6 +270,7 @@ namespace Outer_Swirl
                 typeof(OuterSwirlEventSystem.MoveToNextFloorPatch),
                 typeof(OuterSwirlEventSystem.EncodeToDictionaryPatch),
                 typeof(OuterSwirlEventSystem.DecodePatch),
+                typeof(OuterSwirlEventSystem.EnumGetValuesPatch),
                 typeof(FoolSwirlPatch.PatchStart),
                 typeof(FoolSwirlPatch.PatchUpdateRefreshAngles),
                 typeof(FoolSwirlPatch.PatchMoveToNextFloor)

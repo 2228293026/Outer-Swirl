@@ -3,6 +3,7 @@ using HarmonyLib;
 using UnityEngine;
 using UnityModManagerNet;
 using Outer_Swirl.Events;
+using System.Linq;
 
 namespace Outer_Swirl
 {
@@ -28,6 +29,11 @@ namespace Outer_Swirl
             PatchManager.Initialize(_harmony);
             // 注册所有内部补丁
             RegisterAll();
+            // 调试：输出已注册和已应用的补丁数量
+            var registered = PatchManager.GetRegisteredPatchTypes();
+            Debug.Log($"[PatchManager] 已注册补丁数量: {registered.Count}");
+            var applied = PatchManager.GetAppliedPatchTypes();
+            Debug.Log($"[PatchManager] 已应用补丁数量: {applied.Count}");
             // 一次性应用所有已注册且已启用的补丁
             PatchManager.ApplyAll();
 
