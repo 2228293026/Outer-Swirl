@@ -1,12 +1,12 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
 using ADOFAI;
 using HarmonyLib;
 using Newtonsoft.Json;
-using UnityEngine;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
+using UnityEngine;
 using ADOFAIPropInfo = ADOFAI.PropertyInfo;
 
 namespace Outer_Swirl
@@ -14,6 +14,8 @@ namespace Outer_Swirl
     public abstract class CustomEventBase
     {
         public virtual bool AllowFirstFloor => false;
+        public virtual LevelEventExecutionTime ExecutionTime => LevelEventExecutionTime.OnPrebar;
+        public virtual bool isDecoration => false;
         public virtual void OnApply() { }
         public virtual void OnFloor() { }
         public virtual Sprite GetIcon() => null;
@@ -62,8 +64,17 @@ namespace Outer_Swirl
         private static bool _initialized;
         private static List<LevelEvent> _backup = new();
         private static readonly Dictionary<int, Dictionary<string, object>> _floorCache = new();
-        private static readonly List<(string name, MemberInfo member)> _propMap = new();
-        private static string _eventFullName;
+        private sealed class PropAccessor
+        {
+            public string Name;
+            public Type Type;
+            public MemberInfo Member;
+            public Func<CustomEventBase, object> Getter;
+            public Action<CustomEventBase, object> Setter;
+        }
+
+        private static readonly List<PropAccessor> _propAccessors = new();
+        internal static string _eventFullName;
         private static List<LevelEventCategory> _eventCategories;
         private static string _pendingLocJson;
 
@@ -91,22 +102,39 @@ namespace Outer_Swirl
                         categories.Add(cat);
                 }
 
-                _propMap.Clear();
+                _propAccessors.Clear();
                 foreach (var prop in type.GetProperties())
                 {
                     if (prop.IsDefined(typeof(EventPropertyAttribute), false))
-                        _propMap.Add((prop.Name, prop));
+                    {
+                        _propAccessors.Add(new PropAccessor
+                        {
+                            Name = prop.Name,
+                            Type = prop.PropertyType,
+                            Member = prop,
+                            Getter = BuildGetter(prop, type),
+                            Setter = BuildSetter(prop, type, prop.PropertyType)
+                        });
+                    }
                 }
                 foreach (var field in type.GetFields())
                 {
                     if (field.IsDefined(typeof(EventPropertyAttribute), false))
-                        _propMap.Add((field.Name, field));
+                    {
+                        _propAccessors.Add(new PropAccessor
+                        {
+                            Name = field.Name,
+                            Type = field.FieldType,
+                            Member = field,
+                            Getter = BuildGetter(field, type),
+                            Setter = BuildSetter(field, type, field.FieldType)
+                        });
+                    }
                 }
-                Debug.Log($"[OuterSwirl] _propMap count={_propMap.Count}");
+                Debug.Log($"[OuterSwirl] _propAccessors count={_propAccessors.Count}");
 
                 _eventFullName = fullName;
                 _eventCategories = categories;
-                TryRegister();
             }
             catch (Exception ex)
             {
@@ -119,13 +147,13 @@ namespace Outer_Swirl
             if (_pendingLocJson == null) return;
             var json = _pendingLocJson;
             _pendingLocJson = null;
-            RegisterLocalization(json);
+            OuterSwirlLocalization.RegisterLocalization(json);
         }
 
         static void TryRegister()
         {
-            if (_eventFullName == null) return;
-            var eventKey = EventType.ToString();
+            if (OuterSwirlEventSystem._eventFullName == null) return;
+            var eventKey = OuterSwirlEventSystem.EventType.ToString();
             if (GCS.levelEventsInfo != null && GCS.levelEventsInfo.ContainsKey(eventKey))
             {
                 EventInfo = GCS.levelEventsInfo[eventKey];
@@ -146,7 +174,7 @@ namespace Outer_Swirl
                 {
                     name = eventKey,
                     type = EventType,
-                    executionTime = LevelEventExecutionTime.OnBar,
+                    executionTime = _instance.ExecutionTime,
                     allowFirstFloor = _instance.AllowFirstFloor,
                     useGroups = false,
                     categories = _eventCategories,
@@ -154,29 +182,18 @@ namespace Outer_Swirl
                 Debug.Log("[OuterSwirl] TR: EventInfo created");
 
                 var propsInfo = new Dictionary<string, ADOFAIPropInfo>();
-                foreach (var (name, member) in _propMap)
+                foreach (var accessor in _propAccessors)
                 {
+                    var name = accessor.Name;
+                    var member = accessor.Member;
+                    var propType = accessor.Type;
                     Debug.Log($"[OuterSwirl] TR: processing prop '{name}'");
 
-                    Type propType = null;
                     object defaultValue = null;
-
-                    if (member is System.Reflection.PropertyInfo pi)
+                    try { defaultValue = accessor.Getter(_instance); }
+                    catch (Exception ex)
                     {
-                        propType = pi.PropertyType;
-                        Debug.Log($"[OuterSwirl] TR: is PropertyInfo, type={propType?.Name}");
-                        try { defaultValue = pi.GetValue(_instance); } catch { }
-                    }
-                    else if (member is System.Reflection.FieldInfo fi)
-                    {
-                        propType = fi.FieldType;
-                        Debug.Log($"[OuterSwirl] TR: is FieldInfo, type={propType?.Name}");
-                        defaultValue = fi.GetValue(_instance);
-                    }
-                    else
-                    {
-                        Debug.Log($"[OuterSwirl] TR: member is neither PropertyInfo nor FieldInfo: {member?.GetType().Name}");
-                        continue;
+                        Debug.LogError($"[OuterSwirl] Getter for '{name}' failed: {ex}");
                     }
 
                     var labelAttr = Attribute.GetCustomAttribute(member, typeof(PropertyLabelAttribute)) as PropertyLabelAttribute;
@@ -186,7 +203,6 @@ namespace Outer_Swirl
                         ["name"] = name,
                         ["type"] = MapPropertyTypeString(propType),
                         ["default"] = defaultValue ?? "",
-                        ["canBeDisabled"] = false,
                         ["key"] = labelAttr?.LocalizationKey ?? ""
                     };
                     Debug.Log("[OuterSwirl] TR: pDict ready");
@@ -211,7 +227,10 @@ namespace Outer_Swirl
                         if (icon != null)
                             GCS.levelEventIcons[EventType] = icon;
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"[OuterSwirl] Icon retrieval failed: {ex}");
+                    }
                 }
 
                 Debug.Log($"[OuterSwirl] Registered event '{_eventFullName}' (ID={CustomEventTypeBase})");
@@ -230,24 +249,17 @@ namespace Outer_Swirl
         {
             try
             {
-                var field = typeof(EditorConstants).GetField("soloTypes", BindingFlags.Static | BindingFlags.Public);
-                if (field == null)
-                {
-                    Debug.Log("[OuterSwirl] soloTypes field not found");
-                    return;
-                }
+                var getter = PatchManager.CreateStaticFieldGetter<LevelEventType[]>(typeof(EditorConstants), nameof(EditorConstants.soloTypes));
+                var setter = PatchManager.CreateStaticFieldSetter<LevelEventType[]>(typeof(EditorConstants), nameof(EditorConstants.soloTypes));
 
-                var current = (LevelEventType[])field.GetValue(null);
+                var current = getter();
                 var customType = (LevelEventType)CustomEventTypeBase;
-
-                // 如果已经包含则跳过
                 if (Array.IndexOf(current, customType) >= 0) return;
 
-                // 添加新元素
                 var newArray = new LevelEventType[current.Length + 1];
                 Array.Copy(current, newArray, current.Length);
                 newArray[current.Length] = customType;
-                field.SetValue(null, newArray);
+                setter(newArray);
 
                 Debug.Log($"[OuterSwirl] Added event type {customType} to soloTypes");
             }
@@ -255,6 +267,48 @@ namespace Outer_Swirl
             {
                 Debug.LogError($"[OuterSwirl] Failed to register solo type: {ex}");
             }
+        }
+
+        static Func<CustomEventBase, object> BuildGetter(MemberInfo member, Type declaringType)
+        {
+            var instanceParam = Expression.Parameter(typeof(CustomEventBase), "instance");
+            var castInstance = Expression.Convert(instanceParam, declaringType);
+
+            Expression memberAccess = member switch
+            {
+                System.Reflection.PropertyInfo pi => Expression.Property(castInstance, pi),
+                System.Reflection.FieldInfo fi => Expression.Field(castInstance, fi),
+                _ => throw new ArgumentException("Unsupported member")
+            };
+
+            var boxed = Expression.Convert(memberAccess, typeof(object));
+            return Expression.Lambda<Func<CustomEventBase, object>>(boxed, instanceParam).Compile();
+        }
+
+        static Action<CustomEventBase, object> BuildSetter(MemberInfo member, Type declaringType, Type memberType)
+        {
+            var instanceParam = Expression.Parameter(typeof(CustomEventBase), "instance");
+            var valueParam = Expression.Parameter(typeof(object), "value");
+            var castInstance = Expression.Convert(instanceParam, declaringType);
+
+            // 如果 raw 运行时类型 == memberType，直接 unbox；否则走 ChangeType
+            var isInstanceOf = Expression.TypeIs(valueParam, memberType);
+            var directCast = Expression.Convert(valueParam, memberType);
+            var changeTypeCall = Expression.Call(
+                typeof(Convert), nameof(Convert.ChangeType), null,
+                valueParam, Expression.Constant(memberType));
+            var convertedCast = Expression.Convert(changeTypeCall, memberType);
+
+            var finalValue = Expression.Condition(isInstanceOf, directCast, convertedCast);
+
+            Expression assign = member switch
+            {
+                System.Reflection.PropertyInfo pi => Expression.Assign(Expression.Property(castInstance, pi), finalValue),
+                System.Reflection.FieldInfo fi => Expression.Assign(Expression.Field(castInstance, fi), finalValue),
+                _ => throw new ArgumentException("Unsupported member")
+            };
+
+            return Expression.Lambda<Action<CustomEventBase, object>>(assign, instanceParam, valueParam).Compile();
         }
 
         static string MapPropertyTypeString(Type t)
@@ -286,83 +340,6 @@ namespace Outer_Swirl
             ["th"] = SystemLanguage.Thai,
         };
 
-        public static void RegisterLocalization(string json)
-        {
-            try
-            {
-                Debug.Log($"[OuterSwirl] RL: start");
-                var entries = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(json);
-                if (entries == null) { Debug.Log("[OuterSwirl] RL: entries null"); return; }
-                Debug.Log($"[OuterSwirl] RL: parsed {entries.Count} entries");
-
-                var asm = AppDomain.CurrentDomain.GetAssemblies()
-                    .FirstOrDefault(a => a.GetName().Name == "Assembly-CSharp-firstpass");
-                if (asm == null) { Debug.Log("[OuterSwirl] RL: asm not found"); return; }
-                Debug.Log("[OuterSwirl] RL: asm found");
-
-                var locType = asm.GetType("SA.GoogleDoc.Localization");
-                if (locType == null) { Debug.Log("[OuterSwirl] RL: Localization type null"); return; }
-                Debug.Log("[OuterSwirl] RL: Localization type found");
-
-                var clientField = locType.GetField("Client",
-                    BindingFlags.Public | BindingFlags.Static);
-                if (clientField == null) { Debug.Log("[OuterSwirl] RL: Client field null"); return; }
-                Debug.Log("[OuterSwirl] RL: Client field found");
-
-                var client = clientField.GetValue(null);
-                if (client == null) { Debug.Log("[OuterSwirl] RL: client value null"); return; }
-                Debug.Log($"[OuterSwirl] RL: client type={client.GetType().FullName}");
-
-                var sheetField = client.GetType().GetField("SheetDictionary",
-                    BindingFlags.NonPublic | BindingFlags.Instance);
-                if (sheetField == null) { Debug.Log("[OuterSwirl] RL: SheetDictionary field null"); return; }
-                Debug.Log("[OuterSwirl] RL: SheetDictionary field found");
-
-                var sheet = sheetField.GetValue(client) as Dictionary<SystemLanguage, Dictionary<string, string>>;
-                if (sheet == null)
-                {
-                    Debug.Log("[OuterSwirl] RL: SheetDictionary not ready yet, will retry later");
-                    _pendingLocJson = json;
-                    return;
-                }
-                Debug.Log($"[OuterSwirl] RL: sheet has {sheet.Count} languages");
-
-                foreach (var kvp in entries)
-                {
-                    string enValue = null;
-                    foreach (var tKvp in kvp.Value)
-                    {
-                        if (!LangCodeMap.TryGetValue(tKvp.Key, out var lang)) continue;
-                        if (!sheet.TryGetValue(lang, out var langDict))
-                        {
-                            langDict = new Dictionary<string, string>();
-                            sheet[lang] = langDict;
-                        }
-                        langDict[kvp.Key] = tKvp.Value;
-                        if (tKvp.Key == "en")
-                            enValue = tKvp.Value;
-                    }
-                    // fallback: 未提供翻译的语言用英文补上
-                    if (enValue != null)
-                    {
-                        foreach (var langKvp in sheet)
-                        {
-                            if (!langKvp.Value.ContainsKey(kvp.Key))
-                                langKvp.Value[kvp.Key] = enValue;
-                        }
-                    }
-                }
-                Debug.Log("[OuterSwirl] RL: done");
-
-                // 自动注入 editor.{EventType} 别名，这样编辑器显示事件名称时能找到翻译
-                TryInjectEditorAlias(sheet);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[OuterSwirl] Localization load error: {ex.Message}");
-            }
-        }
-
         static void TryInjectEditorAlias(Dictionary<SystemLanguage, Dictionary<string, string>> sheet)
         {
             if (!sheet.Any()) return;
@@ -378,14 +355,12 @@ namespace Outer_Swirl
 
         // ===== Harmony Patch Classes =====
 
-        [HarmonyPatch(typeof(scnGame), "ApplyEventsToFloors", typeof(List<scrFloor>))]
+        [HarmonyPatch(typeof(scnGame), nameof(scnGame.ApplyEventsToFloors), typeof(List<scrFloor>))]
         internal static class ClearCachePatch
         {
             [HarmonyPrefix]
             static void ClearCache()
             {
-                TryRegister();
-                TryRegisterLocalization();
                 _floorCache.Clear();
                 Patch.FoolSwirlPatch.Active = false;
             }
@@ -402,7 +377,7 @@ namespace Outer_Swirl
             }
         }
 
-        [HarmonyPatch(typeof(scnGame), "ApplyEvent")]
+        [HarmonyPatch(typeof(scnGame), nameof(scnGame.ApplyEvent))]
         internal static class ApplyEventPatch
         {
             [HarmonyPrefix]
@@ -411,8 +386,9 @@ namespace Outer_Swirl
                 if ((int)evnt.eventType != CustomEventTypeBase) return true;
 
                 var dataCopy = new Dictionary<string, object>();
-                foreach (var (name, _) in _propMap)
+                foreach (var accessor in _propAccessors)
                 {
+                    var name = accessor.Name;
                     if (evnt.ContainsKey(name))
                         dataCopy[name] = evnt[name];
                 }
@@ -435,7 +411,7 @@ namespace Outer_Swirl
             }
         }
 
-        [HarmonyPatch(typeof(LevelData), "EncodeToDictionary")]
+        [HarmonyPatch(typeof(LevelData), nameof(LevelData.EncodeToDictionary))]
         internal static class EncodeToDictionaryPatch
         {
             [HarmonyPrefix]
@@ -467,7 +443,7 @@ namespace Outer_Swirl
             }
         }
 
-        [HarmonyPatch(typeof(LevelData), "Decode")]
+        [HarmonyPatch(typeof(LevelData), nameof(LevelData.Decode))]
         internal static class DecodePatch
         {
             [HarmonyPostfix]
@@ -501,7 +477,7 @@ namespace Outer_Swirl
             }
         }
 
-        [HarmonyPatch(typeof(Enum), "GetValues")]
+        [HarmonyPatch(typeof(Enum), nameof(Enum.GetValues))]
         internal static class EnumGetValuesPatch
         {
             private static bool _executeOriginal = false;
@@ -524,33 +500,41 @@ namespace Outer_Swirl
             }
         }
 
-        // ===== Helper =====
+        [HarmonyPatch(typeof(RDString), nameof(RDString.GetWithCheck))]
+        internal static class RDStringGetWithCheckPatch
+        {
+            [HarmonyPrefix]
+            private static bool Prefix(string key, out bool exists, ref string __result)
+            {
+                if (OuterSwirlLocalization.TryGetLocalizedString(key, out string value))
+                {
+                    __result = value;
+                    exists = true;
+                    return false; // 跳过原方法
+                }
+                exists = false;
+                return true; // 继续原方法
+            }
+        }
+    
+
+    // ===== Helper =====
 
         static void ApplyProperties(Dictionary<string, object> data)
         {
             if (data == null) return;
-            foreach (var (name, member) in _propMap)
+            foreach (var accessor in _propAccessors)
             {
+                var name = accessor.Name;
                 if (!data.TryGetValue(name, out var raw)) continue;
                 try
                 {
-                    Type targetType = member switch
-                    {
-                        System.Reflection.PropertyInfo pi => pi.PropertyType,
-                        System.Reflection.FieldInfo fi => fi.FieldType,
-                        _ => null,
-                    };
-                    if (targetType == null) continue;
-
-                    object val = (raw != null && targetType.IsInstanceOfType(raw))
-                        ? raw : Convert.ChangeType(raw, targetType);
-
-                    if (member is System.Reflection.PropertyInfo pi2)
-                        pi2.SetValue(_instance, val);
-                    else if (member is FieldInfo fi2)
-                        fi2.SetValue(_instance, val);
+                    accessor.Setter(_instance, raw);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[OuterSwirl] Setter for '{name}' failed: {ex}");
+                }
             }
         }
     }

@@ -8,6 +8,8 @@ namespace Outer_Swirl.Events
     public class SetOuterSwirlEvent : CustomEventBase
     {
         public override bool AllowFirstFloor => true;
+        public override LevelEventExecutionTime ExecutionTime => LevelEventExecutionTime.OnPrebar;
+        public override bool isDecoration => false;
 
         [EventProperty]
         [PropertyToggleable(true)]
@@ -16,7 +18,7 @@ namespace Outer_Swirl.Events
 
         public override void OnApply()
         {
-            Patch.FoolSwirlPatch.Active = Enable;
+            //Patch.FoolSwirlPatch.Active = Enable;
         }
 
         public override void OnFloor()

@@ -22,7 +22,7 @@ namespace Outer_Swirl
 
             var locPath = Path.Combine(Mod.Path, "Localization.json");
             if (File.Exists(locPath))
-                OuterSwirlEventSystem.RegisterLocalization(File.ReadAllText(locPath));
+                OuterSwirlLocalization.RegisterLocalization(File.ReadAllText(locPath));
 
             _harmony = new Harmony(modEntry.Info.Id);
             // 初始化统一补丁管理器
@@ -34,8 +34,6 @@ namespace Outer_Swirl
             Debug.Log($"[PatchManager] 已注册补丁数量: {registered.Count}");
             var applied = PatchManager.GetAppliedPatchTypes();
             Debug.Log($"[PatchManager] 已应用补丁数量: {applied.Count}");
-            // 一次性应用所有已注册且已启用的补丁
-            PatchManager.ApplyAll();
 
             Mod.OnToggle = OnToggle;
         }

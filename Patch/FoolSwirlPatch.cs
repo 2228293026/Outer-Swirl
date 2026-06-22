@@ -9,21 +9,24 @@ namespace Outer_Swirl.Patch
     {
         internal static bool Active { get; set; }
 
-        // same signature as get_foolSwirl() — takes (scrPlanet this), returns bool
-        static bool GetActive(scrPlanet _) => Active;
+        private static readonly MethodInfo _foolSwirlGetter = AccessTools.PropertyGetter(typeof(scrPlanet), "foolSwirl");
 
-        static readonly MethodInfo _target = AccessTools.Method(typeof(scrPlanet), "get_foolSwirl");
-        static readonly MethodInfo _replacement = AccessTools.Method(typeof(FoolSwirlPatch), nameof(GetActive));
+        private static readonly MethodInfo _getActiveMethod = AccessTools.Method(typeof(FoolSwirlPatch), nameof(GetActive));
+
+        static bool GetActive() => Active;
 
         static IEnumerable<CodeInstruction> Replace(IEnumerable<CodeInstruction> instructions)
         {
             foreach (var instr in instructions)
             {
-                if (instr.opcode == OpCodes.Call && instr.operand is MethodInfo mi && mi == _target)
-                {
-                    instr.operand = _replacement;
-                }
                 yield return instr;
+
+                if (instr.opcode == OpCodes.Call && instr.operand is MethodInfo mi &&
+                    mi == _foolSwirlGetter)
+                {
+                    yield return new CodeInstruction(OpCodes.Call, _getActiveMethod);
+                    yield return new CodeInstruction(OpCodes.Or);
+                }
             }
         }
 

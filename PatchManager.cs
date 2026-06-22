@@ -3,6 +3,7 @@ using Outer_Swirl.Patch;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.Emit;
 using UnityEngine;
 
 namespace Outer_Swirl
@@ -191,15 +192,15 @@ namespace Outer_Swirl
 
         #region 辅助工具
 
-        /// <summary>
-        /// 为字段生成并缓存 AccessTools 委托，以便快速读写。
-        /// </summary>
+        // 在 PatchManager 类中添加以下方法
+
+        #region 实例字段
         public static AccessTools.FieldRef<T, F> CreateFieldRef<T, F>(string fieldName) where T : class
         {
             if (string.IsNullOrWhiteSpace(fieldName))
                 throw new ArgumentException("字段名不能为空", nameof(fieldName));
 
-            var key = $"{typeof(T).FullName}.{fieldName}";
+            var key = $"Field:{typeof(T).FullName}.{fieldName}";
             lock (_lock)
             {
                 if (_delegateCache.TryGetValue(key, out var cached))
@@ -210,6 +211,133 @@ namespace Outer_Swirl
                 return fieldRef;
             }
         }
+        #endregion
+
+        #region 实例属性
+        public static Func<T, F> CreatePropertyGetter<T, F>(string propertyName) where T : class
+        {
+            var key = $"PropGet:{typeof(T).FullName}.{propertyName}";
+            lock (_lock)
+            {
+                if (_delegateCache.TryGetValue(key, out var cached))
+                    return (Func<T, F>)cached;
+
+                var prop = AccessTools.Property(typeof(T), propertyName);
+                if (prop == null) throw new MissingMemberException($"Property '{propertyName}' not found on {typeof(T)}");
+                var getMethod = prop.GetGetMethod(true);
+                if (getMethod == null) throw new InvalidOperationException($"Property '{propertyName}' has no getter");
+
+                var del = (Func<T, F>)Delegate.CreateDelegate(typeof(Func<T, F>), getMethod);
+                _delegateCache[key] = del;
+                return del;
+            }
+        }
+
+        public static Action<T, F> CreatePropertySetter<T, F>(string propertyName) where T : class
+        {
+            var key = $"PropSet:{typeof(T).FullName}.{propertyName}";
+            lock (_lock)
+            {
+                if (_delegateCache.TryGetValue(key, out var cached))
+                    return (Action<T, F>)cached;
+
+                var prop = AccessTools.Property(typeof(T), propertyName);
+                if (prop == null) throw new MissingMemberException($"Property '{propertyName}' not found on {typeof(T)}");
+                var setMethod = prop.GetSetMethod(true);
+                if (setMethod == null) throw new InvalidOperationException($"Property '{propertyName}' has no setter");
+
+                var del = (Action<T, F>)Delegate.CreateDelegate(typeof(Action<T, F>), setMethod);
+                _delegateCache[key] = del;
+                return del;
+            }
+        }
+        #endregion
+
+        #region 静态字段
+        public static Func<TField> CreateStaticFieldGetter<TField>(Type declaringType, string fieldName)
+        {
+            var key = $"StaticFieldGet:{declaringType.FullName}.{fieldName}";
+            lock (_lock)
+            {
+                if (_delegateCache.TryGetValue(key, out var cached))
+                    return (Func<TField>)cached;
+
+                var fi = AccessTools.Field(declaringType, fieldName);
+                if (fi == null) throw new MissingMemberException($"{declaringType}.{fieldName}");
+                if (!fi.IsStatic) throw new ArgumentException("Field is not static");
+
+                // 使用 DynamicMethod 生成 ldsfld + ret
+                var method = new DynamicMethod($"get_{fieldName}", typeof(TField), Type.EmptyTypes, true);
+                var il = method.GetILGenerator();
+                il.Emit(OpCodes.Ldsfld, fi);
+                il.Emit(OpCodes.Ret);
+                var del = (Func<TField>)method.CreateDelegate(typeof(Func<TField>));
+                _delegateCache[key] = del;
+                return del;
+            }
+        }
+
+        public static Action<TField> CreateStaticFieldSetter<TField>(Type declaringType, string fieldName)
+        {
+            var key = $"StaticFieldSet:{declaringType.FullName}.{fieldName}";
+            lock (_lock)
+            {
+                if (_delegateCache.TryGetValue(key, out var cached))
+                    return (Action<TField>)cached;
+
+                var fi = AccessTools.Field(declaringType, fieldName);
+                if (fi == null) throw new MissingMemberException($"{declaringType}.{fieldName}");
+                if (!fi.IsStatic) throw new ArgumentException("Field is not static");
+
+                var method = new DynamicMethod($"set_{fieldName}", typeof(void), new[] { typeof(TField) }, true);
+                var il = method.GetILGenerator();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Stsfld, fi);
+                il.Emit(OpCodes.Ret);
+                var del = (Action<TField>)method.CreateDelegate(typeof(Action<TField>));
+                _delegateCache[key] = del;
+                return del;
+            }
+        }
+        #endregion
+
+        #region 静态属性
+        public static Func<TField> CreateStaticPropertyGetter<TField>(Type declaringType, string propertyName)
+        {
+            var key = $"StaticPropGet:{declaringType.FullName}.{propertyName}";
+            lock (_lock)
+            {
+                if (_delegateCache.TryGetValue(key, out var cached))
+                    return (Func<TField>)cached;
+
+                var prop = AccessTools.Property(declaringType, propertyName);
+                if (prop == null) throw new MissingMemberException($"{declaringType}.{propertyName}");
+                var getMethod = prop.GetGetMethod(true);
+                if (getMethod == null) throw new InvalidOperationException("Property has no getter");
+                var del = (Func<TField>)Delegate.CreateDelegate(typeof(Func<TField>), getMethod);
+                _delegateCache[key] = del;
+                return del;
+            }
+        }
+
+        public static Action<TField> CreateStaticPropertySetter<TField>(Type declaringType, string propertyName)
+        {
+            var key = $"StaticPropSet:{declaringType.FullName}.{propertyName}";
+            lock (_lock)
+            {
+                if (_delegateCache.TryGetValue(key, out var cached))
+                    return (Action<TField>)cached;
+
+                var prop = AccessTools.Property(declaringType, propertyName);
+                if (prop == null) throw new MissingMemberException($"{declaringType}.{propertyName}");
+                var setMethod = prop.GetSetMethod(true);
+                if (setMethod == null) throw new InvalidOperationException("Property has no setter");
+                var del = (Action<TField>)Delegate.CreateDelegate(typeof(Action<TField>), setMethod);
+                _delegateCache[key] = del;
+                return del;
+            }
+        }
+        #endregion
 
         /// <summary>
         /// 返回当前已注册的所有补丁类型（调试/状态展示用）。
@@ -271,6 +399,7 @@ namespace Outer_Swirl
                 typeof(OuterSwirlEventSystem.EncodeToDictionaryPatch),
                 typeof(OuterSwirlEventSystem.DecodePatch),
                 typeof(OuterSwirlEventSystem.EnumGetValuesPatch),
+                typeof(OuterSwirlEventSystem.RDStringGetWithCheckPatch),
                 typeof(FoolSwirlPatch.PatchStart),
                 typeof(FoolSwirlPatch.PatchUpdateRefreshAngles),
                 typeof(FoolSwirlPatch.PatchMoveToNextFloor)
