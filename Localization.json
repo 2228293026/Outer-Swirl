@@ -1,0 +1,14 @@
+{
+  "OuterSwirlEvent.displayName": {
+    "en": "Outer Swirl",
+    "zh": "星球外圈",
+    "ko": "외부 원형",
+    "ja": "外側スワール"
+  },
+  "OuterSwirlEvent.Enable.label": {
+    "en": "Enable Outer Swirl",
+    "zh": "启用外圈",
+    "ko": "외부 원형 활성화",
+    "ja": "外側スワールを有効"
+  }
+}
