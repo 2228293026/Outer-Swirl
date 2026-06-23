@@ -392,9 +392,9 @@ namespace Outer_Swirl
         {
             // 这里的补丁类均为 internal，仍然可以在同一程序集（Outer_Swirl）内部访问。
             RegisterPatches(() => true,
-                typeof(OuterSwirlEventSystem.ClearCachePatch),
                 typeof(OuterSwirlEventSystem.EditorAwakePatch),
                 typeof(OuterSwirlEventSystem.ApplyEventPatch),
+                typeof(OuterSwirlEventSystem.ScnGamePlayOuterSwirlResetPatch),
                 typeof(OuterSwirlEventSystem.ParseEnum),
                 typeof(OuterSwirlEventSystem.EnumGetValuesPatch),
                 typeof(OuterSwirlEventSystem.RDStringGetWithCheckPatch),

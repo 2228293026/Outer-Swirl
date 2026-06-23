@@ -2,6 +2,7 @@ using ADOFAI;
 using HarmonyLib;
 using Newtonsoft.Json;
 using Outer_Swirl.Events;
+using Outer_Swirl.Patch;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -316,20 +317,6 @@ namespace Outer_Swirl
 
         // ===== Harmony Patch Classes =====
 
-        [HarmonyPatch(typeof(scnGame), nameof(scnGame.ApplyEventsToFloors), typeof(List<scrFloor>))]
-        internal static class ClearCachePatch
-        {
-            [HarmonyPrefix]
-            static void ClearCache(List<LevelEvent> events)
-            {
-                _floorCache.Clear();
-
-                // 过滤掉 null 事件，避免 ApplyEventsToFloors 内部的 Contains 报错
-                if (events != null)
-                    events.RemoveAll(e => e == null);
-            }
-        }
-
         [HarmonyPatch(typeof(scnGame), "Awake")]
         internal static class EditorAwakePatch
         {
@@ -351,10 +338,12 @@ namespace Outer_Swirl
             {
                 if ((int)evnt.eventType != OuterSwirlEventSystem.CustomEventTypeBase)
                     return true;
+                if (scnGame.instance == null && evnt.eventType == LevelEventType.CustomBackground)
+                {
+                    return true;
+                }
 
                 int index = customFloorID ?? evnt.floor;
-                if (index < 0 || index >= floors.Count)
-                    return false; // 索引无效，跳过
 
                 scrFloor floor = floors[index];
                 GameObject floorGO = floor.gameObject;
@@ -370,11 +359,20 @@ namespace Outer_Swirl
                 comp.SetStartTime(bpm, offset);
                 comp.sourceLevelEvent = evnt;
 
-                if (!floor.plusEffects.Contains(comp))
-                    floor.plusEffects.Add(comp);
+                floor.plusEffects.Add(comp);
 
                 __result = comp; // 必须返回
                 return false; // 拦截原方法
+            }
+        }
+
+        [HarmonyPatch(typeof(scnGame), nameof(scnGame.Play), new Type[] { typeof(int), typeof(bool) })]
+        internal static class ScnGamePlayOuterSwirlResetPatch
+        {
+            [HarmonyPrefix]
+            private static void Prefix()
+            {
+                ffxOuterSwirl.ResetEffect(false);
             }
         }
 

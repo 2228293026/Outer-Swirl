@@ -13,7 +13,7 @@ namespace Outer_Swirl.Events
 
         [EventProperty]
         [PropertyLabel(LocalizationKey = "OuterSwirlEvent.Enable.label")]
-        public bool enable { get; set; } = true;
+        public bool enabled { get; set; } = true;
 
         private Sprite _flippedIcon;
 

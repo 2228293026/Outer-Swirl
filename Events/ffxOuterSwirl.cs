@@ -11,18 +11,16 @@ namespace Outer_Swirl.Events
 
         public override void Decode(LevelEvent evnt)
         {
-            if (evnt.TryGet("enable", out bool enable))
-                Enable = enable;
+            Enable = evnt.GetBool("enabled");
         }
 
         public override void StartEffect(scrPlanet planet = null)
         {
-            Patch.FoolSwirlPatch.Active = Enable;
+            ResetEffect(Enable);
         }
-
-        public override void Kill()
+        public static void ResetEffect(bool enable)
         {
-            base.Kill();
+            Patch.FoolSwirlPatch.Active = enable;
         }
     }
 }
