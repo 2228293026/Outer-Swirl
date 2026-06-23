@@ -323,7 +323,6 @@ namespace Outer_Swirl
             static void ClearCache(List<LevelEvent> events)
             {
                 _floorCache.Clear();
-                Patch.FoolSwirlPatch.Active = false;
 
                 // 过滤掉 null 事件，避免 ApplyEventsToFloors 内部的 Contains 报错
                 if (events != null)
