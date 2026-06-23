@@ -193,7 +193,7 @@ namespace Outer_Swirl.Patch
                     __instance.m_meshRenderer.material = mat;
                 }
 
-                bool? flip = GetHoldFlip(__instance.startFloor);
+                /*
                 float correctCCW;
                 if (flip.HasValue)
                 {
@@ -204,12 +204,14 @@ namespace Outer_Swirl.Patch
                     correctCCW = __instance.startFloor.isCCW ? -1f : 1f;
                 }
 
+
                 _isCCWMultRef(__instance) = correctCCW;
                 mat.SetFloat("_CCW", correctCCW);
+                */
             }
         }
 
-
+        /*
 
         private static bool? GetHoldFlip(scrFloor floor)
         {
@@ -234,5 +236,6 @@ namespace Outer_Swirl.Patch
             }
             return null;
         }
+        */
     }
 }

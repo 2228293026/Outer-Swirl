@@ -233,41 +233,10 @@ namespace Outer_Swirl
                 if (GCS.levelEventsInfo.ContainsKey(eventKey))
                     RegisterSoloType();
 
-                ModifyHoldEvent();
-
             }
             catch (Exception ex)
             {
                 Debug.LogError($"[OuterSwirl] Register event failed: {ex}");
-            }
-        }
-
-        private static void ModifyHoldEvent()
-        {
-            try
-            {
-                if (GCS.levelEventsInfo == null) return;
-                if (!GCS.levelEventsInfo.TryGetValue("Hold", out var holdInfo)) return;
-
-                // 检查是否已经添加过
-                if (holdInfo.propertiesInfo.ContainsKey("flip")) return;
-
-                // 创建新的属性信息
-                var propDict = new Dictionary<string, object>
-                {
-                    ["name"] = "flip",
-                    ["type"] = "Bool",
-                    ["default"] = false,
-                    ["key"] = "editor.hold.flip"  // 可以添加本地化
-                };
-                var propInfo = new ADOFAIPropInfo(propDict, holdInfo);
-                holdInfo.propertiesInfo["flip"] = propInfo;
-
-                Debug.Log("[OuterSwirl] Added 'flip' property to Hold event.");
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[OuterSwirl] ModifyHoldEvent failed: {ex}");
             }
         }
 

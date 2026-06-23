@@ -195,7 +195,6 @@ namespace Outer_Swirl
 
         #region 辅助工具
 
-        // 在 PatchManager 类中添加以下方法
 
         #region 实例字段
         public static AccessTools.FieldRef<T, F> CreateFieldRef<T, F>(string fieldName) where T : class
@@ -342,7 +341,6 @@ namespace Outer_Swirl
         }
         #endregion
 
-        // 在 PatchManager 的 #region 辅助工具 中添加
 
         #region MethodInfo / FieldInfo 缓存
 
@@ -473,8 +471,8 @@ namespace Outer_Swirl
                 typeof(OuterSwirlEventSystem.LevelDataEncode),
                 typeof(OuterSwirlEventSystem.RdEditorUtilsCheckModsDependency),
                 typeof(OuterSwirlEventSystem.LevelEventTypeToString),
-                typeof(FoolSwirlPatch.PatchCreateMesh),
-                typeof(FoolSwirlPatch.PatchHoldRendererUpdate)
+                typeof(FoolSwirlPatch.PatchCreateMesh)
+                //typeof(FoolSwirlPatch.PatchHoldRendererUpdate)
             );
         }
     }
