@@ -1,6 +1,7 @@
 using ADOFAI;
 using HarmonyLib;
 using Newtonsoft.Json;
+using Outer_Swirl.Events;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -319,10 +320,14 @@ namespace Outer_Swirl
         internal static class ClearCachePatch
         {
             [HarmonyPrefix]
-            static void ClearCache()
+            static void ClearCache(List<LevelEvent> events)
             {
                 _floorCache.Clear();
                 Patch.FoolSwirlPatch.Active = false;
+
+                // 过滤掉 null 事件，避免 ApplyEventsToFloors 内部的 Contains 报错
+                if (events != null)
+                    events.RemoveAll(e => e == null);
             }
         }
 
@@ -343,33 +348,34 @@ namespace Outer_Swirl
         internal static class ApplyEventPatch
         {
             [HarmonyPrefix]
-            static bool Prefix(LevelEvent evnt)
+            static bool Prefix(LevelEvent evnt, float bpm, float pitch, List<scrFloor> floors, float offset, int? customFloorID, ref ffxPlusBase __result)
             {
-                if ((int)evnt.eventType != CustomEventTypeBase) return true;
+                if ((int)evnt.eventType != OuterSwirlEventSystem.CustomEventTypeBase)
+                    return true;
 
-                var dataCopy = new Dictionary<string, object>();
-                foreach (var accessor in _propAccessors)
-                {
-                    var name = accessor.Name;
-                    if (evnt.ContainsKey(name))
-                        dataCopy[name] = evnt[name];
-                }
-                _floorCache[evnt.floor] = dataCopy;
-                return false;
-            }
-        }
+                int index = customFloorID ?? evnt.floor;
+                if (index < 0 || index >= floors.Count)
+                    return false; // 索引无效，跳过
 
-        [HarmonyPatch(typeof(scrPlanet), "MoveToNextFloor")]
-        internal static class MoveToNextFloorPatch
-        {
-            [HarmonyPostfix]
-            static void Postfix(scrFloor floor)
-            {
-                if (_floorCache.TryGetValue(floor.seqID, out var data))
-                {
-                    ApplyProperties(data);
-                    _instance.OnFloor();
-                }
+                scrFloor floor = floors[index];
+                GameObject floorGO = floor.gameObject;
+
+                // 获取或创建组件
+                var comp = floorGO.GetComponent<ffxOuterSwirl>() ?? floorGO.AddComponent<ffxOuterSwirl>();
+
+                // 设置组件属性
+                comp.floorID = index;
+                comp.floors = floors;
+                comp.crotchet = (float)(60.0 / (bpm * pitch * floor.speed));
+                comp.Decode(evnt);
+                comp.SetStartTime(bpm, offset);
+                comp.sourceLevelEvent = evnt;
+
+                if (!floor.plusEffects.Contains(comp))
+                    floor.plusEffects.Add(comp);
+
+                __result = comp; // 必须返回
+                return false; // 拦截原方法
             }
         }
 

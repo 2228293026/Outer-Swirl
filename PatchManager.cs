@@ -395,7 +395,6 @@ namespace Outer_Swirl
                 typeof(OuterSwirlEventSystem.ClearCachePatch),
                 typeof(OuterSwirlEventSystem.EditorAwakePatch),
                 typeof(OuterSwirlEventSystem.ApplyEventPatch),
-                typeof(OuterSwirlEventSystem.MoveToNextFloorPatch),
                 typeof(OuterSwirlEventSystem.ParseEnum),
                 typeof(OuterSwirlEventSystem.EnumGetValuesPatch),
                 typeof(OuterSwirlEventSystem.RDStringGetWithCheckPatch),
@@ -404,7 +403,10 @@ namespace Outer_Swirl
                 typeof(FoolSwirlPatch.PatchMoveToNextFloor),
                 typeof(OuterSwirlEventSystem.LevelDataEncode),
                 typeof(OuterSwirlEventSystem.RdEditorUtilsCheckModsDependency),
-                typeof(OuterSwirlEventSystem.LevelEventTypeToString)
+                typeof(OuterSwirlEventSystem.LevelEventTypeToString),
+                typeof(FoolSwirlPatch.PatchCreateMesh),
+                typeof(FoolSwirlPatch.PatchUpdateFoolDir),
+                typeof(FoolSwirlPatch.PatchHoldRendererUpdate)
             );
         }
     }
