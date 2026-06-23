@@ -1,5 +1,7 @@
 using ADOFAI;
+using DG.Tweening;
 using HarmonyLib;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -11,16 +13,27 @@ namespace Outer_Swirl.Patch
     {
         internal static bool Active { get; set; }
 
-        private static readonly MethodInfo _foolSwirlGetter = AccessTools.PropertyGetter(typeof(scrPlanet), "foolSwirl");
+        // 全部改用 PatchManager 缓存
+        private static readonly MethodInfo _foolSwirlGetter =
+            PatchManager.GetMethodInfo(typeof(scrPlanet), "get_foolSwirl");  // 属性 getter
 
-        private static readonly MethodInfo _getActiveMethod = AccessTools.Method(typeof(FoolSwirlPatch), nameof(GetActive));
+        private static readonly MethodInfo _getActiveMethod =
+            PatchManager.GetMethodInfo(typeof(FoolSwirlPatch), nameof(GetActive));
 
-        private static readonly FieldInfo _FOOL_SWIRL = AccessTools.Field(typeof(GCS), nameof(GCS.FOOL_SWIRL));
+        private static readonly FieldInfo _FOOL_SWIRL =
+            PatchManager.GetFieldInfo(typeof(GCS), nameof(GCS.FOOL_SWIRL));
 
-        private static readonly AccessTools.FieldRef<scrPlanet, Vector3> _addBobRef = AccessTools.FieldRefAccess<scrPlanet, Vector3>("addBob");
+        private static readonly AccessTools.FieldRef<scrHoldRenderer, float> _isCCWMultRef =
+            PatchManager.CreateFieldRef<scrHoldRenderer, float>("isCCWMult");
 
-        private static readonly AccessTools.FieldRef<scrHoldRenderer, float> _isCCWMultRef = AccessTools.FieldRefAccess<scrHoldRenderer, float>("isCCWMult");
+        private static readonly AccessTools.FieldRef<scrPlanet, scrPlanet> _movingToNextRef =
+            PatchManager.CreateFieldRef<scrPlanet, scrPlanet>("movingToNext");
 
+        private static readonly AccessTools.FieldRef<scrPlanet, float> _swirlTweenRef =
+            PatchManager.CreateFieldRef<scrPlanet, float>("swirlTween");
+
+        private static readonly Func<scrPlanet, bool> _foolSwirl =
+            PatchManager.CreatePropertyGetter<scrPlanet, bool>("foolSwirl");
 
         static bool GetActive() => Active;
 
@@ -72,8 +85,88 @@ namespace Outer_Swirl.Patch
         internal static class PatchMoveToNextFloor
         {
             [HarmonyTranspiler]
-            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> ins)
-                => Replace(ins);
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+            {
+                var codes = new List<CodeInstruction>();
+
+                foreach (var instr in instructions)
+                {
+                    codes.Add(instr);
+
+                    if (instr.opcode == OpCodes.Call && instr.operand is MethodInfo mi &&
+                        mi == _foolSwirlGetter)
+                    {
+                        codes.Add(new CodeInstruction(OpCodes.Call, _getActiveMethod));
+                        codes.Add(new CodeInstruction(OpCodes.Or));
+                    }
+                }
+
+                var syncMethod = PatchManager.GetMethodInfo(typeof(FoolSwirlPatch), nameof(SyncExtraPlanetsSwirlTween));
+                for (int i = codes.Count - 1; i >= 0; i--)
+                {
+                    if (codes[i].opcode == OpCodes.Ret)
+                    {
+                        codes.Insert(i, new CodeInstruction(OpCodes.Ldarg_0));      // this (scrPlanet)
+                        codes.Insert(i + 1, new CodeInstruction(OpCodes.Ldarg_1));  // floor (scrFloor)
+                        codes.Insert(i + 2, new CodeInstruction(OpCodes.Call, syncMethod));
+                        break;
+                    }
+                }
+
+                return codes;
+            }
+        }
+
+        private static void SyncExtraPlanetsSwirlTween(scrPlanet instance, scrFloor floor)
+        {
+            if (floor == null || floor.numPlanets <= 2)
+                return;
+
+            var system = instance.planetarySystem;
+            if (system == null) return;
+
+            scrPlanet movingToNext = _movingToNextRef(instance);
+            if (movingToNext == null) return;
+
+            bool shouldSwirl = Active || _foolSwirl(instance);
+            float targetSwirl = shouldSwirl ? 1f : 0f;
+            float initialSwirl = shouldSwirl ? 0f : 1f;
+
+            float duration = 0.5f;
+            if (floor.nextfloor != null)
+                duration = (float)(floor.nextfloor.entryTimePitchAdj - floor.entryTimePitchAdj);
+            else if (floor.prevfloor != null)
+                duration = (float)(floor.entryTimePitchAdj - floor.prevfloor.entryTimePitchAdj);
+            duration = Mathf.Min(duration * 0.5f,
+                (float)(instance.conductor.crotchetAtStart * floor.speed) / instance.conductor.song.pitch);
+            if (duration <= 0f) duration = 0.5f;
+
+            bool allMatched = true;
+            foreach (var planet in system.planetList)
+            {
+                if (planet == null) continue;
+                if (Mathf.Abs(_swirlTweenRef(planet) - targetSwirl) > 0.01f)
+                    allMatched = false;
+            }
+            if (allMatched) return;
+
+            foreach (var planet in system.planetList)
+            {
+                if (planet == null) continue;
+                _swirlTweenRef(planet) = initialSwirl;
+            }
+
+            DOVirtual.DelayedCall(0.02f, () =>
+            {
+                foreach (var planet in system.planetList)
+                {
+                    if (planet == null) continue;
+                    DOTween.To(() => _swirlTweenRef(planet),
+                               x => _swirlTweenRef(planet) = x,
+                               targetSwirl, duration)
+                           .SetEase(Ease.OutSine);
+                }
+            });
         }
 
         [HarmonyPatch(typeof(scrHoldRenderer), nameof(scrHoldRenderer.CreateMesh))]
@@ -82,31 +175,6 @@ namespace Outer_Swirl.Patch
             [HarmonyTranspiler]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> ins)
                 => ReplaceCreateMesh(ins);
-        }
-
-        [HarmonyPatch(typeof(scrHoldRenderer), "UpdateFoolDir")]
-        internal static class PatchUpdateFoolDir
-        {
-            [HarmonyPrefix]
-            static bool Prefix(scrHoldRenderer __instance)
-            {
-                if (__instance.startFloor == null || __instance.m_meshRenderer == null)
-                    return false;
-
-                if (Active)
-                {
-                    // 愚人节模式：强制翻转
-                    float correctCCW = __instance.startFloor.isCCW ? 1f : -1f;
-                    _isCCWMultRef(__instance) = correctCCW;
-                    __instance.m_meshRenderer.material.SetFloat("_CCW", correctCCW);
-                    return false; // 跳过原始方法
-                }
-                else
-                {
-                    // 普通模式：让原始方法执行（它会根据 GCS.FOOL_SWIRL 设置）
-                    return true;
-                }
-            }
         }
 
         [HarmonyPatch(typeof(scrHoldRenderer), "Update")]
@@ -125,22 +193,46 @@ namespace Outer_Swirl.Patch
                     __instance.m_meshRenderer.material = mat;
                 }
 
-                // 根据 Active 决定 _CCW
+                bool? flip = GetHoldFlip(__instance.startFloor);
                 float correctCCW;
-                if (Active)
+                if (flip.HasValue)
                 {
-                    // 愚人节翻转：与 isCCW 相反
-                    correctCCW = __instance.startFloor.isCCW ? 1f : -1f;
+                    correctCCW = flip.Value ? (__instance.startFloor.isCCW ? 1f : -1f) : (__instance.startFloor.isCCW ? -1f : 1f);
                 }
                 else
                 {
-                    // 普通逻辑：与 isCCW 相同（isCCW ? -1 : 1）
                     correctCCW = __instance.startFloor.isCCW ? -1f : 1f;
                 }
 
                 _isCCWMultRef(__instance) = correctCCW;
                 mat.SetFloat("_CCW", correctCCW);
             }
+        }
+
+
+
+        private static bool? GetHoldFlip(scrFloor floor)
+        {
+            if (floor == null) return null;
+            var levelData = scnGame.instance?.levelData;
+            if (levelData == null) return null;
+            var events = levelData.levelEvents;
+            if (events == null) return null;
+
+            foreach (var ev in events)
+            {
+                if (ev.floor == floor.seqID && ev.eventType == LevelEventType.Hold)
+                {
+                    if (ev.ContainsKey("flip"))
+                    {
+                        object val = ev["flip"];
+                        if (val is bool b) return b;
+                        if (val is int i) return i != 0;
+                    }
+                    break;
+                }
+            }
+            return null;
         }
     }
 }
