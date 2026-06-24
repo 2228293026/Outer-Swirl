@@ -198,7 +198,8 @@ namespace Outer_Swirl
                         ["name"] = name,
                         ["type"] = MapPropertyTypeString(propType),
                         ["default"] = defaultValue ?? "",
-                        ["key"] = labelAttr?.LocalizationKey ?? ""
+                        ["key"] = labelAttr?.LocalizationKey ?? "",
+                        ["affectsFloors"] = true
                     };
                     Debug.Log("[OuterSwirl] TR: pDict ready");
 
