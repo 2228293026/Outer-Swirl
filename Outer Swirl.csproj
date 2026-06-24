@@ -101,6 +101,7 @@
     <Compile Include="Events\SetOuterSwirlEvent.cs" />
     <Compile Include="OuterSwirlLocalization.cs" />
     <Compile Include="Patch\FoolSwirlPatch.cs" />
+    <Compile Include="Patch\EventsInBarPatch.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="PatchManager.cs" />
   </ItemGroup>

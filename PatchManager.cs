@@ -470,6 +470,10 @@ namespace Outer_Swirl
                 typeof(FoolSwirlPatch.PatchMoveToNextFloor),
                 typeof(FoolSwirlPatch.PatchCreateMesh),
                 typeof(FoolSwirlPatch.PreprocessFloorStates),
+                typeof(EventsInBarPatch.PatchReposition),
+                typeof(EventsInBarPatch.PatchSetCategory),
+                typeof(EventsInBarPatch.PatchSetupFavorites),
+                typeof(EventsInBarPatch.PatchLoadEditorProps),
                 typeof(OuterSwirlEventSystem.LevelDataEncode),
                 typeof(OuterSwirlEventSystem.RdEditorUtilsCheckModsDependency),
                 typeof(OuterSwirlEventSystem.LevelEventTypeToString)
