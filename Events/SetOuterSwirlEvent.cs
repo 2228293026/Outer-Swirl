@@ -3,28 +3,17 @@ using UnityEngine;
 
 namespace Outer_Swirl.Events
 {
-    [EventName("OuterSwirlEvent.displayName")]
+    [EventName("OuterSwirlEvent")]
     [EventCategory("Gameplay")]
     public class SetOuterSwirlEvent : CustomEventBase
     {
         public override bool AllowFirstFloor => true;
-        public override LevelEventExecutionTime ExecutionTime => LevelEventExecutionTime.OnPrebar;
+        public override LevelEventExecutionTime ExecutionTime => LevelEventExecutionTime.OnBar;
         public override bool isDecoration => false;
 
         [EventProperty]
-        [PropertyToggleable(true)]
         [PropertyLabel(LocalizationKey = "OuterSwirlEvent.Enable.label")]
-        public bool Enable { get; set; } = true;
-
-        public override void OnApply()
-        {
-            //Patch.FoolSwirlPatch.Active = Enable;
-        }
-
-        public override void OnFloor()
-        {
-            Patch.FoolSwirlPatch.Active = Enable;
-        }
+        public bool enabled { get; set; } = true;
 
         private Sprite _flippedIcon;
 

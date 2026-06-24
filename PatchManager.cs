@@ -3,6 +3,7 @@ using Outer_Swirl.Patch;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Reflection.Emit;
 using UnityEngine;
 
@@ -51,6 +52,8 @@ namespace Outer_Swirl
                 _delegateCache.Clear();
                 _registeredPatches.Clear();
                 _appliedPatches.Clear();
+                _methodCache.Clear();   // 新增
+                _fieldCache.Clear();    // 新增
                 Debug.Log("[PatchManager] 初始化完成");
             }
         }
@@ -192,7 +195,6 @@ namespace Outer_Swirl
 
         #region 辅助工具
 
-        // 在 PatchManager 类中添加以下方法
 
         #region 实例字段
         public static AccessTools.FieldRef<T, F> CreateFieldRef<T, F>(string fieldName) where T : class
@@ -339,6 +341,71 @@ namespace Outer_Swirl
         }
         #endregion
 
+
+        #region MethodInfo / FieldInfo 缓存
+
+        private static readonly Dictionary<string, MethodInfo> _methodCache = new Dictionary<string, MethodInfo>();
+        private static readonly Dictionary<string, FieldInfo> _fieldCache = new Dictionary<string, FieldInfo>();
+
+        /// <summary>
+        /// 获取并缓存 MethodInfo（实例或静态）。
+        /// </summary>
+        public static MethodInfo GetMethodInfo(Type declaringType, string methodName, Type[] parameters = null, Type[] generics = null)
+        {
+            if (declaringType == null) throw new ArgumentNullException(nameof(declaringType));
+            if (string.IsNullOrWhiteSpace(methodName)) throw new ArgumentException("方法名不能为空", nameof(methodName));
+
+            string key = $"{declaringType.FullName}.{methodName}";
+            if (parameters != null)
+                key += "_" + string.Join(",", parameters.Select(t => t.FullName));
+            if (generics != null)
+                key += "_generic_" + string.Join(",", generics.Select(t => t.FullName));
+
+            lock (_lock)
+            {
+                if (_methodCache.TryGetValue(key, out var cached))
+                    return cached;
+
+                MethodInfo method;
+                if (parameters != null)
+                    method = AccessTools.Method(declaringType, methodName, parameters, generics);
+                else
+                    method = AccessTools.Method(declaringType, methodName, generics);
+
+                if (method == null)
+                    throw new MissingMethodException($"在 {declaringType} 中找不到方法 {methodName}");
+
+                _methodCache[key] = method;
+                return method;
+            }
+        }
+
+        /// <summary>
+        /// 获取并缓存 FieldInfo（实例或静态）。
+        /// </summary>
+        public static FieldInfo GetFieldInfo(Type declaringType, string fieldName)
+        {
+            if (declaringType == null) throw new ArgumentNullException(nameof(declaringType));
+            if (string.IsNullOrWhiteSpace(fieldName)) throw new ArgumentException("字段名不能为空", nameof(fieldName));
+
+            string key = $"{declaringType.FullName}.{fieldName}";
+
+            lock (_lock)
+            {
+                if (_fieldCache.TryGetValue(key, out var cached))
+                    return cached;
+
+                var field = AccessTools.Field(declaringType, fieldName);
+                if (field == null)
+                    throw new MissingFieldException($"在 {declaringType} 中找不到字段 {fieldName}");
+
+                _fieldCache[key] = field;
+                return field;
+            }
+        }
+
+        #endregion
+
         /// <summary>
         /// 返回当前已注册的所有补丁类型（调试/状态展示用）。
         /// </summary>
@@ -392,16 +459,20 @@ namespace Outer_Swirl
         {
             // 这里的补丁类均为 internal，仍然可以在同一程序集（Outer_Swirl）内部访问。
             RegisterPatches(() => true,
-                typeof(OuterSwirlEventSystem.ClearCachePatch),
                 typeof(OuterSwirlEventSystem.EditorAwakePatch),
                 typeof(OuterSwirlEventSystem.ApplyEventPatch),
-                typeof(OuterSwirlEventSystem.MoveToNextFloorPatch),
+                typeof(OuterSwirlEventSystem.ScnGamePlayOuterSwirlResetPatch),
                 typeof(OuterSwirlEventSystem.ParseEnum),
                 typeof(OuterSwirlEventSystem.EnumGetValuesPatch),
                 typeof(OuterSwirlEventSystem.RDStringGetWithCheckPatch),
                 typeof(FoolSwirlPatch.PatchStart),
                 typeof(FoolSwirlPatch.PatchUpdateRefreshAngles),
-                typeof(FoolSwirlPatch.PatchMoveToNextFloor)
+                typeof(FoolSwirlPatch.PatchMoveToNextFloor),
+                typeof(FoolSwirlPatch.PatchCreateMesh),
+                typeof(FoolSwirlPatch.PreprocessFloorStates),
+                typeof(OuterSwirlEventSystem.LevelDataEncode),
+                typeof(OuterSwirlEventSystem.RdEditorUtilsCheckModsDependency),
+                typeof(OuterSwirlEventSystem.LevelEventTypeToString)
             );
         }
     }

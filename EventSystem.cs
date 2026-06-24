@@ -1,12 +1,16 @@
 using ADOFAI;
 using HarmonyLib;
 using Newtonsoft.Json;
+using Outer_Swirl.Events;
+using Outer_Swirl.Patch;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using UnityEngine;
+using static UnityModManagerNet.UnityModManager.Param;
 using ADOFAIPropInfo = ADOFAI.PropertyInfo;
 
 namespace Outer_Swirl
@@ -76,7 +80,6 @@ namespace Outer_Swirl
         private static readonly List<PropAccessor> _propAccessors = new();
         internal static string _eventFullName;
         private static List<LevelEventCategory> _eventCategories;
-        private static string _pendingLocJson;
 
         public static void Initialize(CustomEventBase ev)
         {
@@ -142,14 +145,6 @@ namespace Outer_Swirl
             }
         }
 
-        static void TryRegisterLocalization()
-        {
-            if (_pendingLocJson == null) return;
-            var json = _pendingLocJson;
-            _pendingLocJson = null;
-            OuterSwirlLocalization.RegisterLocalization(json);
-        }
-
         static void TryRegister()
         {
             if (OuterSwirlEventSystem._eventFullName == null) return;
@@ -203,7 +198,8 @@ namespace Outer_Swirl
                         ["name"] = name,
                         ["type"] = MapPropertyTypeString(propType),
                         ["default"] = defaultValue ?? "",
-                        ["key"] = labelAttr?.LocalizationKey ?? ""
+                        ["key"] = labelAttr?.LocalizationKey ?? "",
+                        ["affectsFloors"] = true
                     };
                     Debug.Log("[OuterSwirl] TR: pDict ready");
 
@@ -322,25 +318,16 @@ namespace Outer_Swirl
 
         // ===== Harmony Patch Classes =====
 
-        [HarmonyPatch(typeof(scnGame), nameof(scnGame.ApplyEventsToFloors), typeof(List<scrFloor>))]
-        internal static class ClearCachePatch
-        {
-            [HarmonyPrefix]
-            static void ClearCache()
-            {
-                _floorCache.Clear();
-                Patch.FoolSwirlPatch.Active = false;
-            }
-        }
-
-        [HarmonyPatch(typeof(scnEditor), "Awake")]
+        [HarmonyPatch(typeof(scnGame), "Awake")]
         internal static class EditorAwakePatch
         {
-            [HarmonyPostfix]
-            static void AfterAwake()
+            [HarmonyPrefix]
+            static void BeforeAwake()
             {
                 TryRegister();
-                TryRegisterLocalization();
+                var locPath = Path.Combine(Main.Mod.Path, "Localization.json");
+                if (File.Exists(locPath))
+                    OuterSwirlLocalization.RegisterLocalization(File.ReadAllText(locPath));
             }
         }
 
@@ -348,33 +335,45 @@ namespace Outer_Swirl
         internal static class ApplyEventPatch
         {
             [HarmonyPrefix]
-            static bool Prefix(LevelEvent evnt)
+            static bool Prefix(LevelEvent evnt, float bpm, float pitch, List<scrFloor> floors, float offset, int? customFloorID, ref ffxPlusBase __result)
             {
-                if ((int)evnt.eventType != CustomEventTypeBase) return true;
-
-                var dataCopy = new Dictionary<string, object>();
-                foreach (var accessor in _propAccessors)
+                if ((int)evnt.eventType != OuterSwirlEventSystem.CustomEventTypeBase)
+                    return true;
+                if (scnGame.instance == null && evnt.eventType == LevelEventType.CustomBackground)
                 {
-                    var name = accessor.Name;
-                    if (evnt.ContainsKey(name))
-                        dataCopy[name] = evnt[name];
+                    return true;
                 }
-                _floorCache[evnt.floor] = dataCopy;
-                return false;
+
+                int index = customFloorID ?? evnt.floor;
+
+                scrFloor floor = floors[index];
+                GameObject floorGO = floor.gameObject;
+
+                // 获取或创建组件
+                var comp = floorGO.GetComponent<ffxOuterSwirl>() ?? floorGO.AddComponent<ffxOuterSwirl>();
+
+                // 设置组件属性
+                comp.floorID = index;
+                comp.floors = floors;
+                comp.crotchet = (float)(60.0 / (bpm * pitch * floor.speed));
+                comp.Decode(evnt);
+                comp.SetStartTime(bpm, offset);
+                comp.sourceLevelEvent = evnt;
+
+                floor.plusEffects.Add(comp);
+
+                __result = comp; // 必须返回
+                return false; // 拦截原方法
             }
         }
 
-        [HarmonyPatch(typeof(scrPlanet), "MoveToNextFloor")]
-        internal static class MoveToNextFloorPatch
+        [HarmonyPatch(typeof(scnGame), nameof(scnGame.Play), new Type[] { typeof(int), typeof(bool) })]
+        internal static class ScnGamePlayOuterSwirlResetPatch
         {
-            [HarmonyPostfix]
-            static void Postfix(scrFloor floor)
+            [HarmonyPrefix]
+            private static void Prefix()
             {
-                if (_floorCache.TryGetValue(floor.seqID, out var data))
-                {
-                    ApplyProperties(data);
-                    _instance.OnFloor();
-                }
+                ffxOuterSwirl.ResetEffect(false);
             }
         }
 
@@ -442,9 +441,43 @@ namespace Outer_Swirl
                 return true; // 继续原方法
             }
         }
-    
 
-    // ===== Helper =====
+        [HarmonyPatch(typeof(LevelData), "Encode")]
+        internal static class LevelDataEncode
+        {
+            [HarmonyPrefix]
+            static void Prefix(LevelData __instance)
+            {
+                UpdateRequiredMods(__instance.levelEvents);
+            }
+        }
+
+        [HarmonyPatch(typeof(RDEditorUtils), "CheckModsDependency")]
+        internal static class RdEditorUtilsCheckModsDependency
+        {
+            [HarmonyPrefix]
+            static bool Prefix(object[] mods, ref bool __result)
+            {
+                return FindRequiredModsAndRemove(mods, ref __result);
+            }
+        }
+
+        [HarmonyPatch(typeof(Enum), "ToString", new Type[] { })]
+        internal static class LevelEventTypeToString
+        {
+            [HarmonyPrefix]
+            static bool Prefix(Enum __instance, ref string __result)
+            {
+                if (__instance is LevelEventType && (LevelEventType)__instance == (LevelEventType)CustomEventTypeBase)
+                {
+                    __result = _eventFullName;
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        // ===== Helper =====
 
         static void ApplyProperties(Dictionary<string, object> data)
         {
@@ -462,6 +495,42 @@ namespace Outer_Swirl
                     Debug.LogError($"[OuterSwirl] Setter for '{name}' failed: {ex}");
                 }
             }
+        }
+
+        internal static void UpdateRequiredMods(EventsArray<LevelEvent> events)
+        {
+            object[] array = (object[])scnGame.instance.levelData.levelSettings["requiredMods"];
+            HashSet<object> set = new HashSet<object>(array);
+            if (events.Any<LevelEvent>((LevelEvent e) => e.eventType == (LevelEventType)CustomEventTypeBase))
+            {
+                if (!array.Contains(_eventFullName))
+                {
+                    set.Add(_eventFullName);
+                }
+            }
+            else
+            {
+                set.Remove(_eventFullName);
+            }
+            scnGame.instance.levelData.levelSettings["requiredMods"] = set.ToArray<object>();
+        }
+
+        internal static bool FindRequiredModsAndRemove(object[] mods, ref bool __result)
+        {
+            bool runBaseMethod;
+            if (mods != null && mods.Contains(_eventFullName))
+            {
+                HashSet<object> hashSet = new HashSet<object>(mods);
+                hashSet.Remove(_eventFullName);
+                mods = hashSet.ToArray<object>();
+                __result = RDEditorUtils.CheckModsDependency(mods);
+                runBaseMethod = false;
+            }
+            else
+            {
+                runBaseMethod = true;
+            }
+            return runBaseMethod;
         }
     }
 }
