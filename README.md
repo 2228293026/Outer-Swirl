@@ -17,7 +17,7 @@ Outer Swirl 是一个用于《A Dance of Fire and Ice》（ADOFAI）的 Unity Mo
 | --- | --- |
 | 事件名称 | `Outer Swirl` / `星球外圈` |
 | 事件分类 | `Gameplay` |
-| 执行时机 | `OnPrebar` |
+| 执行时机 | `OnBar` |
 | 是否允许第一格 | 是 |
 | 自定义事件 ID | `100000` |
 
