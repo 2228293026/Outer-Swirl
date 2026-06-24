@@ -468,11 +468,11 @@ namespace Outer_Swirl
                 typeof(FoolSwirlPatch.PatchStart),
                 typeof(FoolSwirlPatch.PatchUpdateRefreshAngles),
                 typeof(FoolSwirlPatch.PatchMoveToNextFloor),
+                typeof(FoolSwirlPatch.PatchCreateMesh),
+                typeof(FoolSwirlPatch.PreprocessFloorStates),
                 typeof(OuterSwirlEventSystem.LevelDataEncode),
                 typeof(OuterSwirlEventSystem.RdEditorUtilsCheckModsDependency),
-                typeof(OuterSwirlEventSystem.LevelEventTypeToString),
-                typeof(FoolSwirlPatch.PatchCreateMesh)
-                //typeof(FoolSwirlPatch.PatchHoldRendererUpdate)
+                typeof(OuterSwirlEventSystem.LevelEventTypeToString)
             );
         }
     }
