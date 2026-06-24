@@ -9,6 +9,7 @@ Outer Swirl 是一个用于《A Dance of Fire and Ice》（ADOFAI）的 Unity Mo
 - 在星球移动到对应楼层时应用事件状态，动态切换外圈效果。
 - 支持英文、简体中文、韩文和日文的事件名称与属性标签本地化。
 - 使用 Harmony 补丁扩展游戏对 `scrPlanet.foolSwirl` 的判断，让外圈状态可以由自定义事件控制。
+- 通过补丁扩展 `LevelEventType` 枚举值列表与 `RDUtils.ParseEnum<LevelEventType>()` 解析，使自定义事件可以按事件类型参与读取与编辑器显示。
 
 ## 事件说明
 
@@ -25,6 +26,13 @@ Outer Swirl 是一个用于《A Dance of Fire and Ice》（ADOFAI）的 Unity Mo
 | 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `Enable` | `Bool` | `true` | 开启或关闭外圈效果。 |
+
+### 读取与运行机制
+
+- 模组初始化时会注册 `OuterSwirlEvent.displayName` 对应的自定义事件，并把事件 ID `100000` 加入编辑器可识别的事件类型列表。
+- 关卡应用事件时，模组会拦截 ID 为 `100000` 的事件，将该楼层的事件属性缓存起来。
+- 星球移动到对应楼层后，模组读取缓存的 `Enable` 值并更新外圈状态。
+- 最新实现通过 `RDUtils.ParseEnum<LevelEventType>()` 补丁识别自定义事件类型；不再依赖把自定义事件转写成 `EditorComment` 的兼容层。
 
 ## 安装
 
@@ -73,7 +81,7 @@ bin\Release\Outer Swirl.dll
 .
 ├── Events/SetOuterSwirlEvent.cs   # 自定义 Outer Swirl 事件定义
 ├── Patch/FoolSwirlPatch.cs        # 扩展 foolSwirl 判断的 Harmony 补丁
-├── EventSystem.cs                 # 自定义事件注册、执行与本地化挂钩
+├── EventSystem.cs                 # 自定义事件注册、事件缓存、枚举解析与本地化挂钩
 ├── PatchManager.cs                # Harmony 补丁注册与生命周期管理
 ├── OuterSwirlLocalization.cs      # 多语言文本加载与查询
 ├── Info.json                      # Unity Mod Manager 元数据
@@ -86,6 +94,7 @@ bin\Release\Outer Swirl.dll
 - 新增补丁后，请在 `PatchManager.RegisterAll()` 中注册补丁类型。
 - 新增事件属性时，请在事件成员上添加 `[EventProperty]`，并按需添加 `[PropertyLabel]` 等属性元数据。
 - 新增本地化文本时，请同步更新 `Localization.json`。
+- 自定义事件类型解析依赖 `OuterSwirlEventSystem.ParseEnum`，调整事件名或事件 ID 时需要同步检查事件注册、解析与本地化键。
 
 ## 许可证
 
